@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Task Garden</title>
+<style>body{font:18px system-ui;margin:3rem auto;padding:0 1rem;max-width:42rem;background:#f5f4ee;color:#18372d}input,button{font:inherit;padding:.6rem}button{cursor:pointer}li{margin:1rem 0}form{display:flex;gap:.5rem;flex-wrap:wrap}input{flex:1;min-width:12rem}:focus-visible{outline:3px solid #1155cc}button{background:#18372d;color:white;border:0;border-radius:4px}#error{color:#8c1324}</style>
+</head><body><main><h1>Task Garden</h1><p>A tiny place to grow a plan.</p>
+<form id="form" novalidate><label for="title">New task</label><input id="title" autocomplete="off"><button>Add task</button></form>
+<p id="error" role="alert"></p><p id="status" role="status"></p><ul id="tasks" aria-label="Tasks"></ul></main>
+<script>
+const headers = { 'Content-Type':'application/json', Authorization:'Bearer local-lab-token' };
+const title = document.querySelector('#title');
+const status = document.querySelector('#status');
+const error = document.querySelector('#error');
+const list = document.querySelector('#tasks');
+async function render() {
+ const response = await fetch('/tasks',{headers});
+ if (!response.ok) throw new Error('Tasks could not be loaded.');
+ const tasks = await response.json();
+ list.replaceChildren();
+ for (const task of tasks) {
+  const li = document.createElement('li');
+  const label = document.createElement('label');
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox'; checkbox.checked = task.completed;
+  label.append(checkbox, document.createTextNode(task.title));
+  checkbox.onchange = async () => {
+   try {
+    const response = await fetch('/tasks/'+task.id,{method:'PATCH',headers,body:JSON.stringify({completed:checkbox.checked})});
+    if (!response.ok) throw new Error('Task could not be updated.');
+    status.textContent = checkbox.checked ? 'Task completed.' : 'Task reopened.';
+   } catch(e) { checkbox.checked = !checkbox.checked; error.textContent = e.message; }
+  };
+  const remove = document.createElement('button'); remove.textContent = 'Remove';
+  remove.setAttribute('aria-label','Remove '+task.title);
+  remove.onclick = async () => {
+   try {
+    const response = await fetch('/tasks/'+task.id,{method:'DELETE',headers});
+    if (!response.ok) throw new Error('Task could not be removed.');
+    await render(); status.textContent = 'Task removed.';
+   } catch(e) { error.textContent = e.message; }
+  };
+  li.append(label, ' ', remove); list.append(li);
+ }
+}
+document.querySelector('#form').onsubmit = async e => {
+ e.preventDefault(); error.textContent = ''; status.textContent = '';
+ if (!title.value.trim()) { error.textContent = 'Enter a task title.'; title.focus(); return; }
+ if (title.value.trim().length > 120) { error.textContent = 'Use 120 characters or fewer.'; return; }
+ try {
+  const response = await fetch('/tasks',{method:'POST',headers,body:JSON.stringify({title:title.value})});
+  if (!response.ok) throw new Error('Task could not be saved. Try again.');
+  title.value = ''; await render(); status.textContent = 'Task added.'; title.focus();
+ } catch(e) { error.textContent = e.message; }
+};
+render().catch(e => { error.textContent = e.message; });
+</script></body></html>
