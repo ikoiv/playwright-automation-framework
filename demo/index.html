@@ -2,7 +2,9 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Task Garden</title>
 <style>body{font:18px system-ui;margin:3rem auto;padding:0 1rem;max-width:42rem;background:#f5f4ee;color:#18372d}input,button{font:inherit;padding:.6rem}button{cursor:pointer}li{margin:1rem 0}form{display:flex;gap:.5rem;flex-wrap:wrap}input{flex:1;min-width:12rem}:focus-visible{outline:3px solid #1155cc}button{background:#18372d;color:white;border:0;border-radius:4px}#error{color:#8c1324}</style>
 </head><body><main><h1>Task Garden</h1><p>A tiny place to grow a plan.</p>
+<!-- Real labels and native controls support both keyboard interaction and role-based tests. -->
 <form id="form" novalidate><label for="title">New task</label><input id="title" autocomplete="off"><button>Add task</button></form>
+<!-- Separate error and status regions expose failures and successful actions to assistive tools. -->
 <p id="error" role="alert"></p><p id="status" role="status"></p><ul id="tasks" aria-label="Tasks"></ul></main>
 <script>
 const headers = { 'Content-Type':'application/json', Authorization:'Bearer local-lab-token' };
@@ -10,6 +12,7 @@ const title = document.querySelector('#title');
 const status = document.querySelector('#status');
 const error = document.querySelector('#error');
 const list = document.querySelector('#tasks');
+// Rebuild from server data so refreshing the page reflects persisted process-local state.
 async function render() {
  const response = await fetch('/tasks',{headers});
  if (!response.ok) throw new Error('Tasks could not be loaded.');
@@ -20,12 +23,14 @@ async function render() {
   const label = document.createElement('label');
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox'; checkbox.checked = task.completed;
+  // Text nodes display task input as text, never as executable HTML.
   label.append(checkbox, document.createTextNode(task.title));
   checkbox.onchange = async () => {
    try {
     const response = await fetch('/tasks/'+task.id,{method:'PATCH',headers,body:JSON.stringify({completed:checkbox.checked})});
     if (!response.ok) throw new Error('Task could not be updated.');
     status.textContent = checkbox.checked ? 'Task completed.' : 'Task reopened.';
+   // If saving fails, restore the previous checkbox state rather than implying success.
    } catch(e) { checkbox.checked = !checkbox.checked; error.textContent = e.message; }
   };
   const remove = document.createElement('button'); remove.textContent = 'Remove';
@@ -40,6 +45,7 @@ async function render() {
   li.append(label, ' ', remove); list.append(li);
  }
 }
+// novalidate lets this handler present consistent demo messages; the API validates again.
 document.querySelector('#form').onsubmit = async e => {
  e.preventDefault(); error.textContent = ''; status.textContent = '';
  if (!title.value.trim()) { error.textContent = 'Enter a task title.'; title.focus(); return; }
@@ -47,7 +53,9 @@ document.querySelector('#form').onsubmit = async e => {
  try {
   const response = await fetch('/tasks',{method:'POST',headers,body:JSON.stringify({title:title.value})});
   if (!response.ok) throw new Error('Task could not be saved. Try again.');
+  // Clear the draft only after the API confirms it was saved.
   title.value = ''; await render(); status.textContent = 'Task added.'; title.focus();
+ // Leave the draft intact after a failed save so the user can retry.
  } catch(e) { error.textContent = e.message; }
 };
 render().catch(e => { error.textContent = e.message; });
